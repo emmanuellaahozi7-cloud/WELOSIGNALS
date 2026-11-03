@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -77,18 +78,31 @@ app.post('/api/analyze-chart', async (req: Request, res: Response): Promise<void
       return;
     }
 
-    // Clean data URL prefix if sent
     let base64Clean = imageBase64;
     let resolvedMimeType = mimeType;
+
     if (imageBase64.includes(';base64,')) {
       const parts = imageBase64.split(';base64,');
       resolvedMimeType = parts[0].replace('data:', '') || 'image/png';
       base64Clean = parts[1];
     } else if (imageBase64.startsWith('data:image/svg+xml')) {
-      // If SVG data URL was passed directly
       const svgContent = decodeURIComponent(imageBase64.replace(/^data:image\/svg\+xml;utf8,/, ''));
       base64Clean = Buffer.from(svgContent).toString('base64');
       resolvedMimeType = 'image/svg+xml';
+    }
+
+    // Gemini vision accepts raster formats: image/png, image/jpeg, image/webp.
+    // If the image is SVG or other non-supported format, rasterize it with sharp
+    const supportedGeminiTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
+    if (!supportedGeminiTypes.includes(resolvedMimeType) || resolvedMimeType.includes('svg')) {
+      try {
+        const inputBuffer = Buffer.from(base64Clean, 'base64');
+        const pngBuffer = await sharp(inputBuffer).png().toBuffer();
+        base64Clean = pngBuffer.toString('base64');
+        resolvedMimeType = 'image/png';
+      } catch (convErr: any) {
+        console.warn("Conversion image avec sharp échouée, conservation format d'origine:", convErr.message);
+      }
     }
 
     const ai = getGeminiClient();

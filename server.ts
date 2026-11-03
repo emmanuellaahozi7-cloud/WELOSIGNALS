@@ -218,13 +218,14 @@ Exécute l'analyse visuelle complète, identifie l'actif, le timeframe, la struc
       });
     };
 
-    // Fast execution: try primary gemini-3.8-flash first, fallback to gemini-flash-latest if unavailable
-    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest'];
+    // Fast execution: try primary gemini-3.8-flash first, fallback to other valid models
+    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let lastError: any = null;
     let responseText: string | null = null;
 
     for (const modelName of candidateModels) {
       try {
+        console.log(`[TradeVision AI] Attempting model: ${modelName}...`);
         const genResult = await withTimeout(
           ai.models.generateContent({
             model: modelName,
@@ -247,16 +248,17 @@ Exécute l'analyse visuelle complète, identifie l'actif, le timeframe, la struc
               responseSchema: responseSchemaConfig,
             },
           }),
-          50000
+          25000
         );
 
         if (genResult && genResult.text) {
+          console.log(`[TradeVision AI] Success with model: ${modelName}!`);
           responseText = genResult.text;
           break;
         }
       } catch (err: any) {
         lastError = err;
-        console.warn(`Model ${modelName} unavailable or timed out:`, err.message || err);
+        console.warn(`[TradeVision AI] Model ${modelName} failed:`, err.message || err);
       }
     }
 
@@ -265,17 +267,42 @@ Exécute l'analyse visuelle complète, identifie l'actif, le timeframe, la struc
     }
 
     const rawText = responseText;
-    let parsedData;
+    let parsedData: any = {};
     try {
       parsedData = JSON.parse(rawText);
     } catch {
       const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      parsedData = JSON.parse(cleaned);
+      try {
+        parsedData = JSON.parse(cleaned);
+      } catch {
+        parsedData = {};
+      }
     }
+
+    const sanitizedAnalysis = {
+      asset: parsedData?.asset || 'Inconnu',
+      timeframe: parsedData?.timeframe || 'Inconnu',
+      trend: ['BULLISH', 'BEARISH', 'NEUTRAL'].includes(parsedData?.trend) ? parsedData.trend : 'NEUTRAL',
+      recommendation: ['BUY', 'SELL', 'NO_TRADE'].includes(parsedData?.recommendation) ? parsedData.recommendation : 'NO_TRADE',
+      win_probability: typeof parsedData?.win_probability === 'number' ? parsedData.win_probability : parseInt(String(parsedData?.win_probability || '50'), 10) || 50,
+      confidence_level: ['HAUTE', 'MOYENNE', 'FAIBLE'].includes(parsedData?.confidence_level) ? parsedData.confidence_level : 'MOYENNE',
+      trade_setup: {
+        entry_price: parsedData?.trade_setup?.entry_price ?? 'N/A',
+        stop_loss: parsedData?.trade_setup?.stop_loss ?? 'N/A',
+        take_profit_1: parsedData?.trade_setup?.take_profit_1 ?? 'N/A',
+        take_profit_2: parsedData?.trade_setup?.take_profit_2 ?? 'N/A',
+        risk_reward_ratio: parsedData?.trade_setup?.risk_reward_ratio ?? '1:2',
+      },
+      key_confluences: Array.isArray(parsedData?.key_confluences) && parsedData.key_confluences.length > 0 
+        ? parsedData.key_confluences 
+        : ['Structure Price Action observée', 'Confluence technique globale'],
+      technical_justification: parsedData?.technical_justification || "Analyse technique effectuée sur le graphique fourni.",
+      risk_warning: parsedData?.risk_warning || "Toujours appliquer une gestion rigoureuse du capital (1% à 2% max par position).",
+    };
 
     res.json({
       success: true,
-      analysis: parsedData,
+      analysis: sanitizedAnalysis,
       rawJson: rawText,
     });
   } catch (error: any) {

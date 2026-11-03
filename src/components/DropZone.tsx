@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, Sparkles, X, Layers, ArrowRight, Clipboard, Eye, RefreshCw } from 'lucide-react';
+import { 
+  UploadCloud, Image as ImageIcon, Sparkles, X, Layers, 
+  ArrowRight, Clipboard, RefreshCw, Zap, CheckCircle2, ShieldCheck 
+} from 'lucide-react';
 import { SAMPLE_CHARTS, SampleChart } from '../data/sampleCharts.ts';
 
 interface DropZoneProps {
@@ -13,7 +16,28 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
   const [userNotes, setUserNotes] = useState<string>('');
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [activeSampleId, setActiveSampleId] = useState<string | null>(null);
+  const [autoAnalyze, setAutoAnalyze] = useState<boolean>(true);
+  const [loadingStep, setLoadingStep] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Animated loading step ticker
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev + 1) % 4);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
+  const loadingMessages = [
+    "Prétraitement et optimisation haute résolution du graphique...",
+    "Détection de l'actif, timeframe et orientation de la tendance...",
+    "Identification des Order Blocks, Fair Value Gaps (FVG) et balayages de liquidité...",
+    "Calcul des niveaux mathématiques de trade (Entry, SL, TP1, TP2) et ratio R:R...",
+  ];
 
   // Handle file reading
   const processFile = (file: File) => {
@@ -25,8 +49,16 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       setSelectedImage(result);
-      setImageName(file.name);
+      const name = file.name || 'Capture_TradingView.png';
+      setImageName(name);
       setActiveSampleId(null);
+
+      // Auto-trigger analysis immediately if enabled
+      if (autoAnalyze) {
+        setTimeout(() => {
+          onAnalyze(result, userNotes, undefined);
+        }, 150);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -63,7 +95,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
         }
       }
     }
-  }, []);
+  }, [userNotes, autoAnalyze]);
 
   useEffect(() => {
     window.addEventListener('paste', handlePaste);
@@ -74,6 +106,11 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
     setSelectedImage(sample.dataUrl);
     setImageName(sample.name);
     setActiveSampleId(sample.id);
+
+    // Auto-launch analysis on sample selection for instant feedback!
+    setTimeout(() => {
+      onAnalyze(sample.dataUrl, sample.description, sample.id);
+    }, 150);
   };
 
   const clearImage = () => {
@@ -91,8 +128,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
   };
 
   return (
-    <div className="w-full">
-      {/* Upload Box */}
+    <div className="w-full space-y-4">
+      {/* Upload Zone */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -117,6 +154,46 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
           }}
         />
 
+        {/* Loading Overlay with Live Steps */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-[#080c16]/95 backdrop-blur-md rounded-3xl z-20 flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+            <div className="relative mb-5">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
+              </div>
+              <div className="absolute -inset-1 rounded-2xl bg-emerald-500/20 blur-md -z-10 animate-pulse" />
+            </div>
+
+            <h3 className="text-lg font-extrabold text-white mb-2">
+              Analyse Visuelle Multimodale en Cours
+            </h3>
+            
+            <p className="text-xs text-emerald-300 font-mono max-w-md h-9 flex items-center justify-center transition-all">
+              {loadingMessages[loadingStep]}
+            </p>
+
+            {/* Step progress pills */}
+            <div className="flex items-center gap-1.5 mt-4">
+              {[0, 1, 2, 3].map((step) => (
+                <div
+                  key={step}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${
+                    loadingStep === step
+                      ? 'w-8 bg-emerald-400'
+                      : loadingStep > step
+                      ? 'w-3 bg-emerald-700'
+                      : 'w-3 bg-slate-800'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <span className="text-[11px] text-slate-500 mt-4 font-mono">
+              Propulsé par Google Gemini 3.8 Flash Vision
+            </span>
+          </div>
+        )}
+
         {selectedImage ? (
           <div className="space-y-4">
             <div className="relative group max-h-[420px] overflow-hidden rounded-2xl border border-slate-700 bg-black/40 flex items-center justify-center">
@@ -126,7 +203,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
                 className="max-h-[380px] w-auto object-contain rounded-xl shadow-2xl transition-transform group-hover:scale-[1.01]"
               />
               <div className="absolute top-3 right-3 flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md text-[11px] font-mono text-emerald-400 border border-emerald-500/30">
+                <span className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-mono text-emerald-400 border border-emerald-500/30">
                   {imageName || 'Graphique TradingView'}
                 </span>
                 <button
@@ -140,10 +217,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
             </div>
 
             {/* Optional trader notes */}
-            <div className="max-w-xl mx-auto pt-2">
+            <div className="max-w-xl mx-auto pt-1">
               <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 px-1">
-                <span>Note / Contexte optionnel pour l'IA :</span>
-                <span className="text-[11px] text-slate-500">Ex: Scalp 15m, swing, focus sur le FVG...</span>
+                <span>Note / Contexte pour l'IA (optionnel) :</span>
+                <span className="text-[11px] text-slate-500">Ex: Scalp 15m, swing, FVG...</span>
               </div>
               <input
                 type="text"
@@ -159,20 +236,11 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
               <button
                 onClick={handleStartAnalysis}
                 disabled={isLoading}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
               >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>Analyse Price Action & SMC en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-slate-950" />
-                    <span>Lancer l'Analyse Technique IA (Gemini 3.8)</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                <Sparkles className="w-4 h-4 text-slate-950" />
+                <span>Lancer l'Analyse Technique IA (Gemini 3.8)</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
 
               <button
@@ -210,9 +278,9 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
                 className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs border border-slate-700 shadow-md transition-all cursor-pointer hover:border-slate-600 flex items-center gap-2"
               >
                 <ImageIcon className="w-4 h-4 text-emerald-400" />
-                <span>Sélectionner un fichier</span>
+                <span>Sélectionner une capture</span>
               </button>
-              <div className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+              <div className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
                 <Clipboard className="w-3.5 h-3.5 text-slate-400" />
                 <span>Coller actif (Presse-papier)</span>
               </div>
@@ -221,12 +289,30 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
         )}
       </div>
 
+      {/* Auto-analyze Option Toggle */}
+      <div className="flex items-center justify-between px-2 text-xs text-slate-400">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoAnalyze}
+            onChange={(e) => setAutoAnalyze(e.target.checked)}
+            className="w-4 h-4 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-emerald-500 focus:ring-1 cursor-pointer accent-emerald-500"
+          />
+          <span className="text-slate-300 font-medium">
+            Lancer l'analyse immédiatement dès l'envoi de la capture (recommandé)
+          </span>
+        </label>
+        <span className="text-[11px] text-slate-500 hidden sm:inline font-mono">
+          PNG, JPG, WebP jusqu'à 20 Mo
+        </span>
+      </div>
+
       {/* Quick Test Presets */}
-      <div className="mt-5">
+      <div className="pt-2">
         <div className="flex items-center gap-2 mb-2.5 px-1">
           <Layers className="w-3.5 h-3.5 text-cyan-400" />
           <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-            Graphiques de test rapides (Prêts en 1 clic) :
+            Ou testez instantanément sur ces graphiques réels :
           </span>
         </div>
 
@@ -262,8 +348,9 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
                   {sample.description}
                 </div>
               </div>
-              <div className="text-[10px] text-cyan-400 font-mono mt-2 flex items-center gap-1">
-                <span>Tester ce setup</span>
+              <div className="text-[10px] text-cyan-400 font-mono mt-2 flex items-center gap-1 group-hover:text-emerald-300 transition-colors">
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span>Analyser en 1 clic</span>
                 <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
               </div>
             </button>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   TrendingUp, AlertTriangle, Shield, BookOpen, Layers, 
-  Activity, ArrowRight, Zap, Target, BarChart2 
+  Activity, ArrowRight, Zap, Target, BarChart2, Share2 
 } from 'lucide-react';
 import { TradeAnalysis } from './types/analysis.ts';
 import { Header } from './components/Header.tsx';
@@ -10,6 +10,7 @@ import { DropZone } from './components/DropZone.tsx';
 import { AnalysisResult } from './components/AnalysisResult.tsx';
 import { RawJsonModal } from './components/RawJsonModal.tsx';
 import { AnalysisHistoryModal } from './components/AnalysisHistoryModal.tsx';
+import { ExportPlanModal } from './components/ExportPlanModal.tsx';
 
 const STORAGE_KEY = 'tradevision_analyses_history_v1';
 
@@ -19,6 +20,7 @@ export default function App() {
   const [rawJson, setRawJson] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
 
   const [history, setHistory] = useState<TradeAnalysis[]>(() => {
     try {
@@ -47,6 +49,9 @@ export default function App() {
     setError(null);
     setCurrentImage(imageBase64);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 75000);
+
     try {
       const response = await fetch('/api/analyze-chart', {
         method: 'POST',
@@ -55,8 +60,10 @@ export default function App() {
           imageBase64,
           userNotes,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await response.json();
 
       if (!response.ok || !data.success) {
@@ -88,9 +95,30 @@ export default function App() {
       setHistory((prev) => [result, ...prev.slice(0, 24)]);
     } catch (err: any) {
       console.error('Erreur API:', err);
-      setError(err.message || 'Impossible de joindre le moteur IA. Vérifiez votre connexion.');
+      let cleanMsg = err.message || "Impossible de joindre le moteur IA. Vérifiez votre connexion.";
+      
+      // Parse JSON error bodies if present
+      if (typeof cleanMsg === 'string' && cleanMsg.includes('{"error":')) {
+        try {
+          const parsed = JSON.parse(cleanMsg);
+          cleanMsg = parsed.error?.message || cleanMsg;
+        } catch {}
+      }
+      if (cleanMsg.includes('high demand') || cleanMsg.includes('503')) {
+        cleanMsg = "Le modèle d'analyse vision est temporairement très sollicité. Cliquez sur Réessayer.";
+      } else if (cleanMsg.includes('quota') || cleanMsg.includes('429')) {
+        cleanMsg = "Limite de requêtes temporaire atteinte. Veuillez patienter quelques secondes puis réessayer.";
+      }
+      
+      setError(cleanMsg);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const retryLastAnalysis = () => {
+    if (currentImage) {
+      handleAnalyze(currentImage, '');
     }
   };
 
@@ -125,21 +153,31 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Error Notification */}
+        {/* Error Notification with Retry */}
         {error && (
-          <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-200 flex items-center justify-between gap-4 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
               <div className="text-xs sm:text-sm">
-                <strong>Erreur d'analyse :</strong> {error}
+                <strong>Analyse interrompue :</strong> {error}
               </div>
             </div>
-            <button
-              onClick={() => setError(null)}
-              className="px-3 py-1 rounded-lg bg-rose-900/60 hover:bg-rose-900 text-xs text-rose-200 font-semibold cursor-pointer"
-            >
-              Fermer
-            </button>
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              {currentImage && (
+                <button
+                  onClick={retryLastAnalysis}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer shadow-sm"
+                >
+                  Réessayer
+                </button>
+              )}
+              <button
+                onClick={() => setError(null)}
+                className="px-3 py-1.5 rounded-lg bg-rose-900/60 hover:bg-rose-900 text-xs text-rose-200 font-semibold cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
           </div>
         )}
 
@@ -213,6 +251,13 @@ export default function App() {
                       Analyser un autre graphique
                     </button>
                     <button
+                      onClick={() => setIsExportOpen(true)}
+                      className="text-xs font-bold px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-300 border border-emerald-500/40 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Exporter le plan</span>
+                    </button>
+                    <button
                       onClick={() => setIsRawJsonOpen(true)}
                       className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/40 text-cyan-300 border border-cyan-800/40 transition-colors cursor-pointer"
                     >
@@ -228,6 +273,7 @@ export default function App() {
               analysis={analysis}
               rawJson={rawJson}
               onOpenRawJson={() => setIsRawJsonOpen(true)}
+              onOpenExport={() => setIsExportOpen(true)}
               onReset={resetAnalysis}
             />
           </div>
@@ -318,6 +364,12 @@ export default function App() {
       </footer>
 
       {/* Modals */}
+      <ExportPlanModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        analysis={analysis}
+      />
+
       <RawJsonModal
         isOpen={isRawJsonOpen}
         onClose={() => setIsRawJsonOpen(false)}

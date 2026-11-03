@@ -29,6 +29,7 @@ const getGeminiClient = () => {
       headers: {
         'User-Agent': 'aistudio-build',
       },
+      timeout: 55000,
     },
   });
 };
@@ -91,18 +92,18 @@ app.post('/api/analyze-chart', async (req: Request, res: Response): Promise<void
       resolvedMimeType = 'image/svg+xml';
     }
 
-    // Gemini vision accepts raster formats: image/png, image/jpeg, image/webp.
-    // If the image is SVG or other non-supported format, rasterize it with sharp
-    const supportedGeminiTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
-    if (!supportedGeminiTypes.includes(resolvedMimeType) || resolvedMimeType.includes('svg')) {
-      try {
-        const inputBuffer = Buffer.from(base64Clean, 'base64');
-        const pngBuffer = await sharp(inputBuffer).png().toBuffer();
-        base64Clean = pngBuffer.toString('base64');
-        resolvedMimeType = 'image/png';
-      } catch (convErr: any) {
-        console.warn("Conversion image avec sharp échouée, conservation format d'origine:", convErr.message);
-      }
+    // Normalize, resize, and optimize any image (SVG, PNG, 4K screenshot) to high-quality JPEG (max 1920px)
+    // This reduces payload from 15MB down to ~300KB, preventing Gemini timeouts and payload limits
+    try {
+      const inputBuffer = Buffer.from(base64Clean, 'base64');
+      const optimizedBuffer = await sharp(inputBuffer)
+        .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      base64Clean = optimizedBuffer.toString('base64');
+      resolvedMimeType = 'image/jpeg';
+    } catch (convErr: any) {
+      console.warn("Optimisation image avec sharp échouée, conservation format d'origine:", convErr.message);
     }
 
     const ai = getGeminiClient();
@@ -201,15 +202,31 @@ Exécute l'analyse visuelle complète, identifie l'actif, le timeframe, la struc
       ],
     };
 
-    // Retry logic across candidate models to withstand transient 503 or 429
-    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+    // Timeout helper to avoid any hanging call (50s threshold for vision analysis)
+    const withTimeout = <T>(promise: Promise<T>, ms: number = 50000): Promise<T> => {
+      return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Timeout IA (${ms / 1000}s)`)), ms);
+        promise
+          .then((val) => {
+            clearTimeout(timer);
+            resolve(val);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+    };
+
+    // Fast execution: try primary gemini-3.8-flash first, fallback to gemini-flash-latest if unavailable
+    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest'];
     let lastError: any = null;
     let responseText: string | null = null;
 
     for (const modelName of candidateModels) {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          const genResult = await ai.models.generateContent({
+      try {
+        const genResult = await withTimeout(
+          ai.models.generateContent({
             model: modelName,
             contents: {
               parts: [
@@ -229,20 +246,18 @@ Exécute l'analyse visuelle complète, identifie l'actif, le timeframe, la struc
               responseMimeType: 'application/json',
               responseSchema: responseSchemaConfig,
             },
-          });
+          }),
+          50000
+        );
 
-          if (genResult && genResult.text) {
-            responseText = genResult.text;
-            break;
-          }
-        } catch (err: any) {
-          lastError = err;
-          console.warn(`Model ${modelName} attempt ${attempt} warning:`, err.message || err);
-          // Wait briefly before retry if 503/429
-          await new Promise((r) => setTimeout(r, 800 * attempt));
+        if (genResult && genResult.text) {
+          responseText = genResult.text;
+          break;
         }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Model ${modelName} unavailable or timed out:`, err.message || err);
       }
-      if (responseText) break;
     }
 
     if (!responseText) {

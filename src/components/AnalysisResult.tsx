@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   TrendingUp, TrendingDown, MinusCircle, ShieldAlert, CheckCircle2, 
   Copy, Check, Code, Target, ArrowDownRight, ArrowUpRight, Gauge, 
-  FileText, Zap, HelpCircle, Eye, Sparkles, Scale
+  FileText, Zap, HelpCircle, Eye, Sparkles, Scale, Share2
 } from 'lucide-react';
 import { TradeAnalysis } from '../types/analysis.ts';
 import { PositionCalculator } from './PositionCalculator.tsx';
@@ -11,6 +11,7 @@ interface AnalysisResultProps {
   analysis: TradeAnalysis;
   rawJson?: string;
   onOpenRawJson: () => void;
+  onOpenExport: () => void;
   onReset: () => void;
 }
 
@@ -18,6 +19,7 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({
   analysis,
   rawJson,
   onOpenRawJson,
+  onOpenExport,
   onReset,
 }) => {
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
@@ -195,6 +197,15 @@ ${analysis.risk_warning}`;
         {/* Action Buttons Toolbar in Banner */}
         <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={onOpenExport}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-extrabold shadow-md shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+              title="Exporter le plan en image sociale ou texte compact (Twitter, Telegram, WhatsApp)"
+            >
+              <Share2 className="w-3.5 h-3.5 text-slate-950" />
+              <span>Exporter le Plan</span>
+            </button>
+
             <button
               onClick={copyTradingSummary}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"

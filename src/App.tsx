@@ -44,12 +44,36 @@ export default function App() {
     }
   }, [history]);
 
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  // Timer for active analysis
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isLoading) {
+      setElapsedSeconds(0);
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
+  const handleCancelAnalysis = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  };
+
   const handleAnalyze = async (imageBase64: string, userNotes: string) => {
     setIsLoading(true);
     setError(null);
     setCurrentImage(imageBase64);
 
     const controller = new AbortController();
+    abortControllerRef.current = controller;
     const timeoutId = setTimeout(() => controller.abort(), 75000);
 
     try {
@@ -64,6 +88,7 @@ export default function App() {
       });
 
       clearTimeout(timeoutId);
+      abortControllerRef.current = null;
       const data = await response.json();
 
       if (!response.ok || !data.success) {
@@ -362,6 +387,55 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Active Analysis Loading Modal */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-[#0b101c] border border-emerald-500/40 p-6 sm:p-8 text-center shadow-2xl shadow-emerald-950/50 flex flex-col items-center">
+            {/* Glowing orb */}
+            <div className="relative mb-5">
+              <div className="w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <Activity className="w-10 h-10 animate-pulse text-emerald-400" />
+              </div>
+              <div className="absolute -inset-2 rounded-2xl bg-emerald-500/20 blur-lg -z-10 animate-pulse" />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-mono mb-2">
+              <Zap className="w-3.5 h-3.5 animate-bounce" />
+              <span>Vision IA Active • {elapsedSeconds}s écoulées</span>
+            </div>
+
+            <h3 className="text-xl font-black text-white mb-2">
+              Analyse Technique en Cours
+            </h3>
+
+            <p className="text-xs text-slate-300 max-w-sm mb-6 leading-relaxed">
+              Gemini 3.8 examine les chandeliers japonais, Fair Value Gaps (FVG), Order Blocks institutionnels et calcule le ratio R:R.
+            </p>
+
+            {/* Simulated Scanning Laser on Thumbnail if available */}
+            {currentImage && (
+              <div className="relative w-full max-h-40 overflow-hidden rounded-xl border border-slate-700 bg-black/60 mb-6 flex items-center justify-center">
+                <img
+                  src={currentImage}
+                  alt="Graphique analysé"
+                  className="max-h-40 w-auto object-contain opacity-75"
+                />
+                {/* Scanning green line */}
+                <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#10b981] animate-[bounce_2s_infinite]" />
+              </div>
+            )}
+
+            {/* Cancel Button */}
+            <button
+              onClick={handleCancelAnalysis}
+              className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+            >
+              Annuler l'analyse
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <ExportPlanModal

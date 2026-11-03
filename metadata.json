@@ -1,0 +1,6 @@
+{
+  "name": "TradeVision AI - Analyseur SMC & TradingView",
+  "description": "Expert mondial en analyse technique visuelle : Price Action, Smart Money Concepts (SMC), Order Blocks, FVG, liquidité et plans de trading haute probabilité.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

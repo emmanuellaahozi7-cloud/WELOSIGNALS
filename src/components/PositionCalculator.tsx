@@ -12,11 +12,12 @@ export const PositionCalculator: React.FC<PositionCalculatorProps> = ({ setup, r
   const [riskPercent, setRiskPercent] = useState<number>(1.0);
   const [copied, setCopied] = useState<boolean>(false);
 
-  // Parse numerical prices from strings
+  // Parse numerical prices from strings safely (handles decimal commas and spaces)
   const parseNum = (val: string | number): number | null => {
     if (typeof val === 'number') return isNaN(val) ? null : val;
     if (!val) return null;
-    const cleaned = val.replace(/[^0-9.-]+/g, '');
+    const str = String(val).trim().replace(/\s+/g, '').replace(',', '.');
+    const cleaned = str.replace(/[^0-9.-]+/g, '');
     const n = parseFloat(cleaned);
     return isNaN(n) ? null : n;
   };

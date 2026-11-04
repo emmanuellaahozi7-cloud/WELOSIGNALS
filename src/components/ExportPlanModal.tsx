@@ -24,6 +24,25 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Safe rounded rectangle for cross-browser canvas compatibility
+  const safeRoundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(x, y, w, h, r);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+  };
+
   // Generate high-resolution social sharing canvas
   const renderCanvas = useCallback(() => {
     if (!analysis) return;
@@ -75,7 +94,7 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
     // 4. Header Bar
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.beginPath();
-    ctx.roundRect(50, 40, width - 100, 80, 16);
+    safeRoundRect(ctx, 50, 40, width - 100, 80, 16);
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1.5;
@@ -109,7 +128,7 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
     const tfWidth = 70;
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.roundRect(ctx.measureText(analysis.asset || 'Actif Inconnu').width + 70, 142, tfWidth, 42, 10);
+    safeRoundRect(ctx, ctx.measureText(analysis.asset || 'Actif Inconnu').width + 70, 142, tfWidth, 42, 10);
     ctx.fill();
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 20px monospace';
@@ -121,7 +140,7 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
     const recX = width - 50 - recWidth;
     ctx.fillStyle = isBuy ? 'rgba(16, 185, 129, 0.2)' : isSell ? 'rgba(244, 63, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)';
     ctx.beginPath();
-    ctx.roundRect(recX, 136, recWidth, 52, 14);
+    safeRoundRect(ctx, recX, 136, recWidth, 52, 14);
     ctx.fill();
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 2;
@@ -150,7 +169,7 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
       // Card Background
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.roundRect(cx, cardY, cardWidth, cardHeight, 16);
+      safeRoundRect(ctx, cx, cardY, cardWidth, cardHeight, 16);
       ctx.fill();
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
       ctx.lineWidth = 1.5;
@@ -177,7 +196,7 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
     const midY = 380;
     ctx.fillStyle = '#0e1526';
     ctx.beginPath();
-    ctx.roundRect(50, midY, width - 100, 160, 18);
+    safeRoundRect(ctx, 50, midY, width - 100, 160, 18);
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
     ctx.lineWidth = 1.5;
@@ -244,25 +263,25 @@ export const ExportPlanModal: React.FC<ExportPlanModalProps> = ({
     const barW = width - 100;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.beginPath();
-    ctx.roundRect(50, barY, barW, 10, 5);
+    safeRoundRect(ctx, 50, barY, barW, 10, 5);
     ctx.fill();
 
     // Stop Loss segment (Red)
     ctx.fillStyle = '#f43f5e';
     ctx.beginPath();
-    ctx.roundRect(50, barY, barW * 0.25, 10, 5);
+    safeRoundRect(ctx, 50, barY, barW * 0.25, 10, 5);
     ctx.fill();
 
     // TP1 segment (Teal)
     ctx.fillStyle = '#2dd4bf';
     ctx.beginPath();
-    ctx.roundRect(50 + barW * 0.25, barY, barW * 0.35, 10, 5);
+    safeRoundRect(ctx, 50 + barW * 0.25, barY, barW * 0.35, 10, 5);
     ctx.fill();
 
     // TP2 segment (Emerald)
     ctx.fillStyle = '#10b981';
     ctx.beginPath();
-    ctx.roundRect(50 + barW * 0.6, barY, barW * 0.4, 10, 5);
+    safeRoundRect(ctx, 50 + barW * 0.6, barY, barW * 0.4, 10, 5);
     ctx.fill();
 
     // 9. Footer Watermark

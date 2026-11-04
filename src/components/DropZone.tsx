@@ -23,7 +23,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ onAnalyze, isLoading }) => {
 
   // Handle file reading and instant client compression
   const processFile = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
+    const isImage = file.type ? file.type.startsWith('image/') : (/\.(png|jpe?g|webp|gif|bmp|svg|jfif|heic|heif)$/i.test(file.name) || true);
+    if (!isImage) {
       alert('Veuillez sélectionner un fichier image valide (PNG, JPG, WebP).');
       return;
     }
